@@ -153,9 +153,22 @@ def calcular_analise_segmento(df_season):
     df_seg = df_seg.sort_values('Pontos', ascending=False)
     return df_seg
 
+def calcular_analise_lojas_detalhada(df_season):
+    """Calcula métricas por Loja."""
+    df_lojas = df_season.groupby('Loja').agg({
+        'Pontos': 'sum',
+        COLUNA_PEDIDO: 'nunique'
+    }).reset_index()
+    
+    df_lojas['Valor Médio'] = df_lojas.apply(
+        lambda row: row['Pontos'] / row[COLUNA_PEDIDO] if row[COLUNA_PEDIDO] > 0 else 0, axis=1
+    )
+    
+    df_lojas = df_lojas.sort_values('Pontos', ascending=False)
+    return df_lojas
+
 # --- FUNÇÃO PRINCIPAL DA TELA ---
 def show_architect_dashboard(df_global, user_key):
-    # CSS AJUSTADO: Fontes maiores para tabelas e cards
     st.markdown("""
     <style>
         .badge { padding: 4px 12px; border-radius: 999px; font-weight: bold; font-size: 1rem; display: inline-block; }
@@ -170,7 +183,6 @@ def show_architect_dashboard(df_global, user_key):
         
         .vinculos-box { font-size: 0.9rem; opacity: 0.8; padding: 10px; border-radius: 8px; border: 1px solid rgba(128, 128, 128, 0.2); margin-bottom: 20px; }
         
-        /* Card Adaptativo ao Tema com fonte maior */
         .card-adaptativo { 
             padding: 15px; 
             border-radius: 12px; 
@@ -183,7 +195,6 @@ def show_architect_dashboard(df_global, user_key):
             font-size: 1rem;
         }
         
-        /* Aumento da fonte global das tabelas */
         .stDataFrame { font-size: 1.1rem !important; }
         div[data-testid="stMetricValue"] { font-size: 1.4rem !important; }
     </style>
@@ -204,7 +215,7 @@ def show_architect_dashboard(df_global, user_key):
     if qtd_docs > 1:
         st.markdown(f"<div class='vinculos-box'><b>🔗 Conta Consolidada:</b> Pontuação somada de {qtd_docs} documentos vinculados.</div>", unsafe_allow_html=True)
 
-    # SELEÇÃO DE TEMPORADA (CORRIGIDO: Ordenação Numérica para pegar a maior como padrão)
+    # SELEÇÃO DE TEMPORADA
     if 'Temporada_Exibicao' in df_consolidado.columns:
         try:
             todas_temporadas = sorted(df_consolidado['Temporada_Exibicao'].unique(), key=lambda x: int(x.split(' ')[1]), reverse=True)
@@ -230,13 +241,12 @@ def show_architect_dashboard(df_global, user_key):
         achieved = total_points - current_cat["min"]
         pct_main = (achieved / range_pts) * 100 if range_pts > 0 else 0
         pct_main = min(max(pct_main, 2), 100)
-        # AUMENTADO FONTE DA META
         msg_meta = f"Faltam <b style='font-size:1.1rem;'>{formatar_milhar_br(next_cat['min'] - total_points)}</b> para {next_cat['name']}"
     else:
         pct_main = 100
         msg_meta = "🏆 Topo alcançado!"
 
-    # --- BANNER PRINCIPAL (Fontes Aumentadas) ---
+    # --- BANNER PRINCIPAL ---
     st.markdown(f"""
 <div style="background: linear-gradient(90deg, #0f172a 0%, #334155 100%); padding: 25px; border-radius: 16px; color: white; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
 <div style="display:flex; justify-content: space-between; align-items:flex-start;">
@@ -281,10 +291,8 @@ def show_architect_dashboard(df_global, user_key):
                 def draw_premio(row, col):
                     meta = row['Pontos_Meta']; conqu = total_points >= meta
                     ic_st = "✅" if conqu else "🔒"; cor_st = "#10b981" if conqu else "gray"
-                    # AUMENTADO FONTE DO "FALTA X"
                     txt_f = "" if conqu else f"<span style='color:#f87171; font-size:0.9rem; font-weight:bold;'>Falta {formatar_milhar_br(meta - total_points)}</span>"
                     pct_p = min((total_points / meta) * 100 if meta > 0 else 0, 100); cor_b = "#10b981" if conqu else "#3b82f6"
-                    
                     col.markdown(f"""<div class="card-adaptativo" style="height: 150px;"><div><div style="display:flex; justify-content:space-between;"><strong style="font-size:1.1rem; line-height:1.2;">{row['Titulo']}</strong><span style="color:{cor_st}; font-size:1rem;">{ic_st}</span></div><div style="font-size:0.9rem; opacity:0.8; margin-top:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['Descricao']}</div></div><div style="margin-top:10px;"><div style="display:flex; justify-content:space-between; font-size:0.9rem;"><span>Meta: {formatar_milhar_br(meta)}</span>{txt_f}</div><div style="width:100%; background:rgba(128,128,128,0.2); height:8px; border-radius:99px; margin-top:4px;"><div style="width:{pct_p}%; background:{cor_b}; height:100%; border-radius:99px;"></div></div></div></div>""", unsafe_allow_html=True)
 
                 draw_premio(lista_premios[i], col1)
@@ -313,7 +321,6 @@ def show_architect_dashboard(df_global, user_key):
                         except: d_f = str(acao['Data_Fim'])
                         
                         container.markdown(f"""<div class="card-adaptativo" style="height:240px;"><div><div style="display:flex; justify-content:space-between;"><div style="line-height:1.1;"><strong style="font-size:1.1rem;">{acao['Titulo']}</strong>{tg}<div style="font-size:0.8rem; opacity:0.8; margin-top:4px;">{acao['Tipo']} • Até {d_f}</div></div><div style="text-align:right; min-width:50px;"><div style="font-size:0.75rem; opacity:0.8;">Acelerador</div><strong style="color:#fbbf24; font-size:1.1rem;">+{acao['Acelerador_Pct']}%</strong></div></div><div style="font-size:0.9rem; opacity:0.8; margin-bottom:12px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-top:8px;">{acao['Descricao']}</div></div><div style="background:rgba(128,128,128,0.05); padding:12px; border-radius:10px;"><div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:6px;"><span><b>{formatar_milhar_br(pts_reais)}</b> <span style="color:#fbbf24; font-size:0.8rem;">(+{formatar_milhar_br(pts_bonus-pts_reais)})</span></span><span style="color:{cor_st_tx}; font-weight:bold;">{st_tx}</span></div><div class="prog-container" style="height:10px; margin-top:0;"><div class="prog-fill" style="width:{pct}%; background:{cor_st_tx};"></div></div><div style="text-align:right; font-size:0.8rem; opacity:0.7; margin-top:4px;">Meta: {formatar_milhar_br(meta)} pts</div></div></div>""", unsafe_allow_html=True)
-                    
                     with col1: draw_card(lista_campanhas[i], col1)
                     if i+1 < len(lista_campanhas): 
                         with col2: draw_card(lista_campanhas[i+1], col2)
@@ -327,7 +334,7 @@ def show_architect_dashboard(df_global, user_key):
             df_hist_tabela = calcular_tabela_historico(df_consolidado, temps_com_dados)
             st.dataframe(df_hist_tabela, use_container_width=True)
             
-            st.markdown("###### Evolução Mensal (Pontuação)")
+            st.subheader(" Evolução Mensal (Pontuação)")
             df_evol_pontos = calcular_evolucao_mensal(df_consolidado, 'Pontos')
             def color_evol(val):
                 if isinstance(val, str) and '-' in val and len(val) > 1: return 'color: #ef4444; font-weight: bold;'
@@ -338,7 +345,7 @@ def show_architect_dashboard(df_global, user_key):
             else:
                 st.dataframe(df_evol_pontos, use_container_width=True)
 
-            st.markdown("###### Evolução Mensal (Quantidade de Pedidos)")
+            st.subheader(" Evolução Mensal (Quantidade de Pedidos)")
             if COLUNA_PEDIDO in df_consolidado.columns:
                 df_evol_pedidos = calcular_evolucao_mensal(df_consolidado, COLUNA_PEDIDO)
                 if 'Evolução' in df_evol_pedidos.columns:
@@ -350,7 +357,7 @@ def show_architect_dashboard(df_global, user_key):
     st.markdown("---")
 
     # =========================================================================
-    # NOVO BLOCO: ANÁLISE DE SEGMENTO (VISUAL AJUSTADO - LEGENDA NA DIREITA)
+    # ANÁLISE DE SEGMENTO
     # =========================================================================
     st.subheader("🛍️ Análise por Segmento")
     
@@ -359,8 +366,6 @@ def show_architect_dashboard(df_global, user_key):
     
     if not df_season_seg.empty:
         df_seg = calcular_analise_segmento(df_season_seg)
-        
-        # Ajuste de colunas para dar espaço à legenda na direita
         col_table, col_chart = st.columns([1.3, 2]) 
         
         with col_table:
@@ -376,7 +381,6 @@ def show_architect_dashboard(df_global, user_key):
             )
             
         with col_chart:
-            # GRÁFICO DE PIZZA COM LEGENDA NA DIREITA E FONTE MAIOR
             fig = px.pie(
                 df_seg, 
                 values='Pontos', 
@@ -385,25 +389,22 @@ def show_architect_dashboard(df_global, user_key):
                 color_discrete_sequence=px.colors.qualitative.Pastel
             )
             fig.update_layout(
-                margin=dict(t=20, b=20, l=20, r=120), # Margem direita maior para a legenda
+                margin=dict(t=20, b=20, l=20, r=120), 
                 height=450, 
                 showlegend=True,
-                # LEGENDA NA DIREITA, VERTICAL, FONTE MAIOR
                 legend=dict(
                     orientation="v", 
                     yanchor="middle", 
                     y=0.5, 
                     xanchor="left", 
                     x=1.02,
-                    font=dict(size=14) # Aumento da fonte da legenda
+                    font=dict(size=14)
                 )
             )
             fig.update_traces(textposition='inside', textinfo='percent', textfont_size=14)
             st.plotly_chart(fig, use_container_width=True)
 
-        # --- DRILL-DOWN DE LOJAS ---
         st.markdown("###### Detalhe de Lojas por Segmento")
-        
         lista_segmentos = ["Selecione um Segmento..."] + sorted(df_seg['Segmento'].unique())
         segmento_sel = st.selectbox("Filtrar lojas de:", lista_segmentos)
         
@@ -423,3 +424,44 @@ def show_architect_dashboard(df_global, user_key):
             )
     else:
         st.info("Nenhuma compra registrada nesta temporada para análise de segmento.")
+    
+    st.markdown("---")
+
+    # =========================================================================
+    # ANÁLISE DETALHADA POR LOJA
+    # =========================================================================
+    st.subheader("🏢 Análise Detalhada por Loja")
+    st.markdown("Visão geral de desempenho em cada loja parceira.")
+
+    c_temp, c_search = st.columns([1, 2])
+    sel_temp_loja = c_temp.selectbox("Temporada:", todas_temporadas, index=0, key='sel_temp_loja')
+    search_loja = c_search.text_input("Pesquisar Loja:", placeholder="Digite o nome da loja...", key='search_loja')
+
+    df_loja_filter = df_consolidado[df_consolidado['Temporada_Exibicao'] == sel_temp_loja]
+    
+    if not df_loja_filter.empty:
+        if search_loja:
+            df_loja_filter = df_loja_filter[df_loja_filter['Loja'].str.lower().str.contains(search_loja.lower())]
+        
+        if not df_loja_filter.empty:
+            df_final_lojas = calcular_analise_lojas_detalhada(df_loja_filter)
+            
+            st.dataframe(
+                df_final_lojas.style.format({
+                    'Pontos': formatar_milhar_br,
+                    COLUNA_PEDIDO: formatar_milhar_br,
+                    'Valor Médio': formatar_milhar_br
+                }),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Loja": "Loja Parceira",
+                    "Pontos": "Pontuação Total",
+                    COLUNA_PEDIDO: "Qtd. Pedidos",
+                    "Valor Médio": "Ticket Médio (pts)"
+                }
+            )
+        else:
+            st.warning(f"Nenhuma loja encontrada com o termo '{search_loja}'.")
+    else:
+        st.info("Sem dados para esta temporada.")

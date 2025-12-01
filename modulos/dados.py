@@ -12,10 +12,10 @@ from modulos.config import (
     COLUNA_CNPJ_CPF, 
     COLUNA_ESPECIFICADOR, 
     COLUNA_CPF_NOVO_CADASTRO,
-    NOME_ABA_MAP_CPF_CNPJ, # NOVO: Nome da aba de mapeamento
-    COLUNA_CHAVE_CONSOLIDADA, # NOVO: Nome da coluna de chave final
+    NOME_ABA_MAP_CPF_CNPJ, 
+    COLUNA_CHAVE_CONSOLIDADA, 
     COLUNA_NOME_MAP_CONSOLIDACAO,
-    MES_ORDEM_FISCAL # NOVO: Importado para função utilitária
+    MES_ORDEM_FISCAL 
 )
 
 # Função para carregar os dados (usa cache do streamlit para ser mais rápido)
@@ -183,3 +183,29 @@ def carregar_e_tratar_dados(caminho_arquivo):
             # Mantém a exibição do erro para debug, mas agora deve ser mais raro
             st.error(f"Ocorreu um erro ao ler ou tratar o arquivo: {e}")
             return pd.DataFrame(), pd.DataFrame()
+
+# ==============================================================================
+# FUNÇÃO PARA CARREGAR CREDENCIAIS DA LOJA (NOVO)
+# ==============================================================================
+def carregar_credenciais_lojas(caminho_arquivo):
+    """
+    Lê a aba 'Loja' do Excel para autenticação.
+    Espera colunas: Loja, CNPJ, Responsável, Senha
+    """
+    try:
+        # Lê apenas a aba 'Loja'
+        df_lojas = pd.read_excel(caminho_arquivo, sheet_name='Loja')
+        
+        # Tratamento para garantir que CNPJ e Senha sejam comparáveis
+        if 'CNPJ' in df_lojas.columns:
+            # Remove pontos, traços e barras
+            df_lojas['CNPJ'] = df_lojas['CNPJ'].astype(str).str.replace(r'[^0-9]', '', regex=True)
+            
+        if 'Senha' in df_lojas.columns:
+            # Converte para string e remove '.0'
+            df_lojas['Senha'] = df_lojas['Senha'].astype(str).str.replace('.0', '', regex=False).str.strip()
+            
+        return df_lojas
+    except Exception as e:
+        st.error(f"Erro ao carregar a aba 'Loja' do Excel: {e}")
+        return pd.DataFrame()
