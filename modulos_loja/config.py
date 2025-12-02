@@ -93,9 +93,9 @@ def formatar_evolucao_texto(crescimento_raw):
     """Formata o valor raw de crescimento para texto com indicador (↑, ↓, ≈)."""
     if isinstance(crescimento_raw, (float, int)):
         if crescimento_raw > 0.0001:
-            return f"{crescimento_raw:,.1%} ↑↑" 
+            return f"{crescimento_raw:,.1%} ↑" 
         elif crescimento_raw < -0.0001:
-            return f"{crescimento_raw:,.1%} ↓↓" 
+            return f"{crescimento_raw:,.1%} ↓" 
         else:
             return "0.0% ≈"
     return "N/A"

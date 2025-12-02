@@ -9,7 +9,7 @@ import numpy as np
 
 # 1. Utilitários de formatação (Módulo Geral)
 try:
-    from modulos.tratamento import formatar_milhar_br, calcular_evolucao_raw, formatar_evolucao_texto
+    from modulos_loja.tratamento import formatar_milhar_br, calcular_evolucao_raw, formatar_evolucao_texto
 except ImportError:
     # Fallback caso rode fora da estrutura apenas para teste
     formatar_milhar_br = lambda x, casas_decimais=0: f"{x:,.{casas_decimais}f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -40,9 +40,7 @@ def show_store_dashboard(df_global, store_name):
       store_name: Nome da loja logada (usado para filtrar automaticamente).
     """
     
-    # --- GARANTIA DE INICIALIZAÇÃO DE ESTADO (Correção do KeyError) ---
-    # Colocamos aqui dentro para garantir que rode sempre que a função for chamada,
-    # mesmo após um logout/login que limpe a sessão.
+    # --- GARANTIA DE INICIALIZAÇÃO DE ESTADO ---
     if 'filtro_status_ano' not in st.session_state:
         st.session_state['filtro_status_ano'] = {'temporada': None, 'status': None, 'termo_pesquisa': ''}
     if 'termo_pesquisa_novos' not in st.session_state:
@@ -69,7 +67,7 @@ def show_store_dashboard(df_global, store_name):
     st.sidebar.markdown("---")
     st.sidebar.header("Filtros Interativos")
 
-    # A. Filtro de Temporada (Multiselect - Usado no Item 3)
+    # A. Filtro de Temporada
     temporadas_unicas_exib_full = []
     opcoes_temporada_principal = ['Todas']
     
@@ -85,7 +83,7 @@ def show_store_dashboard(df_global, store_name):
             default=temporadas_unicas_exib_full
         )
 
-    # Base preliminar para filtro de Mês (respeita a seleção de temporada)
+    # Base preliminar para filtro de Mês
     df_base_temp = df_loja_total.copy()
     if temporadas_selecionadas_exib:
         df_base_temp = df_base_temp[df_base_temp['Temporada_Exibicao'].isin(temporadas_selecionadas_exib)]
@@ -101,7 +99,6 @@ def show_store_dashboard(df_global, store_name):
         )
 
     # --- APLICAÇÃO DOS FILTROS DE DATA (BASE GLOBAL) ---
-    # df_total_periodo_base: Dados globais filtrados apenas por DATA (usado para comparativos de mercado)
     df_total_periodo_base = df_global.copy()
     if temporadas_selecionadas_exib:
         df_total_periodo_base = df_total_periodo_base[df_total_periodo_base['Temporada_Exibicao'].isin(temporadas_selecionadas_exib)]
@@ -110,8 +107,6 @@ def show_store_dashboard(df_global, store_name):
 
     # C. Filtro de Segmento (Hierárquico)
     st.sidebar.subheader("Filtros de Entidade")
-    
-    # Mostra apenas segmentos que a loja logada possui vendas
     segmentos_unicos_loja = sorted(df_loja_total['Segmento'].unique())
     segmentos_selecionados = st.sidebar.multiselect(
         "Selecione o Segmento:",
@@ -120,23 +115,16 @@ def show_store_dashboard(df_global, store_name):
     )
 
     # --- CRIAÇÃO DOS DATAFRAMES FINAIS PARA OS ITENS ---
-    
-    # 1. Base da Loja (Filtrada por Data + Segmento + Loja Logada)
     df_filtrado_base = df_total_periodo_base[df_total_periodo_base['Loja'] == store_name].copy()
-    
-    # Depois aplicamos o filtro de segmento
     if segmentos_selecionados:
         df_filtrado_base = df_filtrado_base[df_filtrado_base['Segmento'].isin(segmentos_selecionados)]
     
-    # 2. Base Segmento Total (Global + Data + Segmentos Selecionados)
     df_segmento_total_base = df_total_periodo_base[df_total_periodo_base['Segmento'].isin(segmentos_selecionados)].copy()
-    
-    # 3. Base Gabriel Pro (Global + Data)
     df_gabriel_total_base = df_total_periodo_base.copy()
 
 
     # =======================================================================
-    # ITEM 1: COMPARATIVO DE DESEMPENHO
+    # ITEM 1: COMPARATIVO DE DESEMPENHO (Lógica Ajustada: Meses Equivalentes)
     # =======================================================================
     st.subheader("1. Comparativo de Desempenho (Loja/Segmento vs Gabriel Pro)")
     
@@ -162,7 +150,7 @@ def show_store_dashboard(df_global, store_name):
         if not df_f_kpi.empty and COLUNA_NUMERO_TEMPORADA in df_f_kpi.columns:
             t_atual_num_principal = df_f_kpi[COLUNA_NUMERO_TEMPORADA].iloc[0]
 
-    # Cálculos Item 1
+    # Cálculos Item 1 (Temporada Atual Selecionada)
     pontos_loja, pedidos_loja, novos_clientes_loja, valor_medio_loja = calcular_metricas(df_f_kpi)
     
     ranking_display, ranking_atual = get_ranking_loja(df_total_periodo_base, lojas_selecionadas)
@@ -170,17 +158,38 @@ def show_store_dashboard(df_global, store_name):
     pontos_segmento, pedidos_segmento, novos_clientes_segmento, valor_medio_segmento = calcular_metricas(df_s_kpi)
     pontos_gabriel, pedidos_gabriel, novos_clientes_gabriel, valor_medio_gabriel = calcular_metricas(df_g_kpi)
 
-    # Evolução T vs T-1
+    # Evolução T vs T-1 (COM LÓGICA DE MESES EQUIVALENTES)
     pontos_ant, pedidos_ant, novos_clientes_ant, valor_medio_ant = 0, 0, 0, 0
     variacao_ranking_texto = "N/A"
 
     if t_atual_num_principal > 0:
-        kpis_ant = calcular_kpis_t_vs_t_1(df_global, lojas_selecionadas, segmentos_selecionados, t_atual_num_principal)
-        pontos_ant = kpis_ant['pontos_anterior']
-        pedidos_ant = kpis_ant['pedidos_anterior']
-        novos_clientes_ant = kpis_ant['novos_clientes_anterior']
-        valor_medio_ant = kpis_ant['valor_medio_anterior']
-        variacao_ranking_texto = get_ranking_variacao_texto(ranking_atual, kpis_ant['ranking_anterior'])
+        # 1. Identificar Temporada Anterior
+        t_ant_num = t_atual_num_principal - 1
+        t_ant_str = f"Temporada {t_ant_num}"
+        
+        # 2. Identificar os meses presentes na seleção ATUAL (ex: apenas 4 meses da T10)
+        # Se 'df_f_kpi' estiver filtrado apenas para a T10, ele terá apenas os meses da T10.
+        meses_equivalentes = df_f_kpi['Mês_Exibicao'].unique()
+        
+        # 3. Filtrar a base GLOBAL para a Temporada Anterior APENAS nesses meses
+        # Isso garante que a comparação T-1 seja "like-for-like" (mesma quantidade de meses)
+        df_global_ant_filtrado = df_global[
+            (df_global['Temporada_Exibicao'] == t_ant_str) &
+            (df_global['Mês_Exibicao'].isin(meses_equivalentes))
+        ].copy()
+        
+        # 4. Calcular o Ranking Anterior com a base filtrada pelos meses
+        # (O ranking também deve considerar apenas até o mês X para ser justo)
+        _, ranking_ant_val = get_ranking_loja(df_global_ant_filtrado, lojas_selecionadas)
+        variacao_ranking_texto = get_ranking_variacao_texto(ranking_atual, ranking_ant_val)
+        
+        # 5. Calcular Métricas da Loja na Temporada Anterior (Filtrada)
+        df_loja_ant_filtrada = df_global_ant_filtrado[
+            (df_global_ant_filtrado['Loja'].isin(lojas_selecionadas)) &
+            (df_global_ant_filtrado['Segmento'].isin(segmentos_selecionados))
+        ]
+        
+        pontos_ant, pedidos_ant, novos_clientes_ant, valor_medio_ant = calcular_metricas(df_loja_ant_filtrada)
 
     # Evoluções (Raw)
     ev_ped = calcular_evolucao_raw(pedidos_loja, pedidos_ant)
@@ -228,7 +237,7 @@ def show_store_dashboard(df_global, store_name):
     if t_atual_num_principal > 0:
         t_anterior_num = t_atual_num_principal - 1
         t_anterior_nome = f"Temporada {t_anterior_num}"
-        st.markdown(f"**Nota:** A coluna **Evolução T vs T-1** compara os KPIs da Loja/Segmento na **{temporada_selecionada_item1}** (T) com a **{t_anterior_nome}** (T-1).")
+        st.markdown(f"**Nota:** A coluna **Evolução T vs T-1** compara os dados da **{temporada_selecionada_item1}** contra o **mesmo período proporcional (meses equivalentes)** da **{t_anterior_nome}**.")
     
     st.markdown("---")
 
@@ -432,7 +441,7 @@ def show_store_dashboard(df_global, store_name):
     st.markdown("---")
 
     # =======================================================================
-    # ITEM 4: VALOR MÉDIO (CORRIGIDO)
+    # ITEM 4: VALOR MÉDIO
     # =======================================================================
     st.subheader("4. Valor Médio de Pedido por Mês e Temporada (Filtrado por Loja/Segmento)")
     
@@ -496,12 +505,10 @@ def show_store_dashboard(df_global, store_name):
                 vm_valor_series = df_agrupado_total_temp.loc[df_agrupado_total_temp['Temporada_Exibicao'] == t_col, 'Valor_Medio_Total']
                 vm_valor = vm_valor_series.iloc[0] if not vm_valor_series.empty else 0
                 with cols_kpi_vm[i]:
-                    # CORREÇÃO: Removido 'casas_decimais=2'
                     st.metric(f"Valor Médio {t_col.replace('Temporada ', 'T')}", formatar_milhar_br(vm_valor))
         
         df_pivot_mensal_final.set_index('Mês', inplace=True)
         st.dataframe(
-            # CORREÇÃO: Removido 'casas_decimais=2'
             df_pivot_mensal_final.style.format({col: lambda x: formatar_milhar_br(x) for col in colunas_display_vm})
                 .set_properties(**{'border': '1px solid #333333', 'text-align': 'center'}, subset=pd.IndexSlice[:, colunas_display_vm]),
             use_container_width=True
@@ -552,7 +559,7 @@ def show_store_dashboard(df_global, store_name):
     st.markdown("---")
 
     # =======================================================================
-    # ITEM 7: DESEMPENHO PROFISSIONAL
+    # ITEM 7: DESEMPENHO PROFISSIONAL (Lógica Ajustada: Meses Equivalentes)
     # =======================================================================
     if COLUNA_ESPECIFICADOR in df_filtrado_base.columns:
         st.subheader("7. Desempenho por Profissional e Categoria")
@@ -571,7 +578,7 @@ def show_store_dashboard(df_global, store_name):
             if not df_filtrado_item7.empty and COLUNA_NUMERO_TEMPORADA in df_filtrado_item7.columns:
                 t_atual_num_item7 = df_filtrado_item7[COLUNA_NUMERO_TEMPORADA].iloc[0]
         
-        # 1. Agrupamento
+        # 1. Agrupamento (Temporada Atual)
         df_desempenho = df_filtrado_item7.groupby(COLUNA_ESPECIFICADOR).agg(
             Pontuacao_Total=('Pontos', 'sum'), Qtd_Pedidos=(COLUNA_PEDIDO, 'nunique')
         ).reset_index()
@@ -582,17 +589,45 @@ def show_store_dashboard(df_global, store_name):
         df_desempenho = pd.merge(df_desempenho, df_cnpj_original[[COLUNA_ESPECIFICADOR, COLUNA_CNPJ_CPF]], on=COLUNA_ESPECIFICADOR, how='left')
         df_desempenho.sort_values(by='Pontuacao_Total', ascending=False, inplace=True)
         
-        # 2. Resumo Categorias
+        # 2. Resumo Categorias e Preparação do Histórico Equivalente
         df_resumo_cat = df_desempenho[df_desempenho['Categoria'].isin(CATEGORIAS_NOMES)].groupby('Categoria').agg(
             Contagem=('Categoria', 'size'), Pontuacao_Categoria=('Pontuacao_Total', 'sum')
         ).reset_index()
         
+        # --- LÓGICA DE MESES EQUIVALENTES PARA ITEM 7 ---
+        dict_pontuacao_ant_categoria = {}
+        pontuacao_total_anterior_geral = 0.0
+        
+        if t_atual_num_item7 > 0:
+            # Identificar meses da temporada atual selecionada
+            meses_eq_7 = df_filtrado_item7['Mês_Exibicao'].unique()
+            t_ant_str_7 = f"Temporada {t_atual_num_item7 - 1}"
+            
+            # Filtrar Global para T-1 com os mesmos meses
+            df_ant_filtrado_7 = df_global[
+                (df_global['Temporada_Exibicao'] == t_ant_str_7) &
+                (df_global['Mês_Exibicao'].isin(meses_eq_7)) &
+                (df_global['Loja'].isin(lojas_selecionadas)) &
+                (df_global['Segmento'].isin(segmentos_selecionados))
+            ].copy()
+            
+            # Calcular Pontuação Total Anterior (Geral para a barra de progresso)
+            pontuacao_total_anterior_geral = df_ant_filtrado_7['Pontos'].sum()
+            
+            # Calcular Pontuação por Categoria (Requer classificar a base antiga primeiro)
+            if not df_ant_filtrado_7.empty:
+                df_agg_ant = df_ant_filtrado_7.groupby(COLUNA_ESPECIFICADOR)['Pontos'].sum().reset_index()
+                df_agg_ant.columns = [COLUNA_ESPECIFICADOR, 'Pontuacao_Total']
+                df_cat_ant = calcular_categorias(df_agg_ant)
+                # Somar pontos por categoria
+                dict_pontuacao_ant_categoria = df_cat_ant.groupby('Categoria')['Pontuacao_Total'].sum().to_dict()
+        
+        # 3. Cálculo da Evolução
         evolucao_data = []
         if t_atual_num_item7 > 0:
             for index, row in df_resumo_cat.iterrows():
-                pontuacao_anterior = get_pontuacao_temporada_anterior(
-                    df_global, t_atual_num_item7, lojas_selecionadas, segmentos_selecionados, row['Categoria']
-                )
+                # Busca do dicionário pré-calculado (muito mais rápido e correto pelo mês)
+                pontuacao_anterior = dict_pontuacao_ant_categoria.get(row['Categoria'], 0)
                 crescimento_raw = calcular_evolucao_raw(row['Pontuacao_Categoria'], pontuacao_anterior)
                 evolucao_data.append({'Categoria': row['Categoria'], 'Evolução Pontos': crescimento_raw, 'Evolução Pontos Texto': formatar_evolucao_texto(crescimento_raw)})
         else:
@@ -605,9 +640,9 @@ def show_store_dashboard(df_global, store_name):
         pontos_loja_item7 = df_filtrado_item7['Pontos'].sum()
         crescimento_total_raw = 0.0
         evolucao_total_texto = 'N/A'
+        
         if t_atual_num_item7 > 0:
-            pontuacao_total_anterior = get_pontuacao_temporada_anterior(df_global, t_atual_num_item7, lojas_selecionadas, segmentos_selecionados, None)
-            crescimento_total_raw = calcular_evolucao_raw(pontos_loja_item7, pontuacao_total_anterior)
+            crescimento_total_raw = calcular_evolucao_raw(pontos_loja_item7, pontuacao_total_anterior_geral)
             evolucao_total_texto = formatar_evolucao_texto(crescimento_total_raw)
             
         df_total_row = pd.DataFrame([{
@@ -646,14 +681,11 @@ def show_store_dashboard(df_global, store_name):
         st.markdown("---")
         termo_pesquisa = st.text_input("Pesquisar Profissional:", key='search_prof')
         
-        # Cria a tabela base filtrando apenas as categorias válidas
         df_tabela = df_desempenho[df_desempenho['Categoria'].isin(CATEGORIAS_NOMES)].copy()
         
-        # TRATAMENTO DE ERRO: Verifica se o DataFrame está vazio antes de prosseguir
         if df_tabela.empty:
             st.info("Nenhum dado encontrado para os filtros selecionados.")
         else:
-            # Aplica filtro de texto se houver
             if termo_pesquisa:
                 t = termo_pesquisa.lower()
                 df_tabela = df_tabela[
@@ -662,7 +694,6 @@ def show_store_dashboard(df_global, store_name):
                     df_tabela[COLUNA_CNPJ_CPF].astype(str).str.lower().str.contains(t)
                 ]
             
-            # Verifica se as colunas necessárias existem para evitar KeyError
             cols_necessarias = [COLUNA_ESPECIFICADOR, COLUNA_CNPJ_CPF, 'Pontuacao_Total', 'Qtd_Pedidos', 'Categoria']
             cols_existentes = [col for col in cols_necessarias if col in df_tabela.columns]
             

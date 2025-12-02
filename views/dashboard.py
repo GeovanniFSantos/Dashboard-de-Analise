@@ -1170,13 +1170,13 @@ def show_dashboard():
                 if pontuacao_anterior > 0:
                     crescimento_formatado = f"{crescimento_raw:.1%}"
                     if crescimento_raw > 0.0001:
-                        evolucao_texto = f"{crescimento_formatado} ↑↑"
+                        evolucao_texto = f"{crescimento_formatado} ↑"
                     elif crescimento_raw < -0.0001:
-                        evolucao_texto = f"{crescimento_formatado} ↓↓"
+                        evolucao_texto = f"{crescimento_formatado} ↓"
                     else:
                         evolucao_texto = "0.0% ≈≈"
                 elif pontuacao_atual > 0:
-                    evolucao_texto = "+100% ↑↑"
+                    evolucao_texto = "+100% ↑"
                 else:
                     evolucao_texto = "N/A"
                     
@@ -1213,13 +1213,13 @@ def show_dashboard():
             if pontuacao_total_anterior > 0:
                 crescimento_formatado = f"{crescimento_total_raw:.1%}"
                 if crescimento_total_raw > 0.0001:
-                    evolucao_texto_total = f"{crescimento_formatado} ↑↑"
+                    evolucao_texto_total = f"{crescimento_formatado} ↑"
                 elif crescimento_total_raw < -0.0001:
-                    evolucao_texto_total = f"{crescimento_formatado} ↓↓"
+                    evolucao_texto_total = f"{crescimento_formatado} ↓"
                 else:
                     evolucao_texto_total = "0.0% ≈≈"
             elif pontuacao_total_atual > 0:
-                evolucao_texto_total = "+100% ↑↑"
+                evolucao_texto_total = "+100% ↑"
             else:
                 evolucao_texto_total = "N/A"
                 

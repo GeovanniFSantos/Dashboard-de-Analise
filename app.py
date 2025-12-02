@@ -25,11 +25,11 @@ except Exception as e:
     df_global = None
 
 # 4. Imports das Telas (Views)
-# Certifique-se de que os arquivos store_page.py e acelerador_loja.py existem em 'views', mesmo que vazios
+# Tenta importar todas as views. Se falhar, mostra erro detalhado.
 try:
-    from views import login, dashboard, acoes, architect_page, premios, store_page, acelerador_loja
+    from views import login, dashboard, acoes, architect_page, premios, store_page, acelerador_loja, campanhas_loja
 except ImportError as e:
-    st.error(f"Erro ao importar módulos das telas. Verifique se criou os arquivos 'store_page.py' e 'acelerador_loja.py' na pasta views. Detalhe: {e}")
+    st.error(f"Erro ao importar módulos das telas. Verifique se criou todos os arquivos na pasta views. Detalhe: {e}")
     st.stop()
 
 def main():
@@ -51,7 +51,7 @@ def main():
                 index=0
             )
             st.markdown("---")
-            if st.button("Sair / Logout"):
+            if st.button("Sair"):
                 st.session_state.clear()
                 st.rerun()
 
@@ -62,8 +62,8 @@ def main():
         elif menu_option == "Premiações":
             premios.show_premios()
         elif menu_option == "Acelerador Loja":
-            st.title("🔧 Configuração de Acelerador (Admin)")
-            st.info("Aqui você poderá configurar metas e aceleradores para as lojas (Em breve).")
+            # Chama o painel de gestão de campanhas para lojas
+            campanhas_loja.show_admin_campanhas_loja()
 
     # === 2. LOJA (NOVO) ===
     elif st.session_state['user_type'] == 'loja':
